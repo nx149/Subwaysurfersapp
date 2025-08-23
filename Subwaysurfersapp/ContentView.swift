@@ -58,7 +58,11 @@ struct ContentView: View {
                 
             }
             
-            Tab("Leaderboard", systemImage: "heart") {
+            Tab("Leaderboard", systemImage: "trophy") {
+                TutorialsView()
+                
+            }
+            Tab("exercise", systemImage: "heart") {
                 
             }
         }
