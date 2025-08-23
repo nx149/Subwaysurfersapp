@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct BadgeView: View {
+    @State private var hiHatIsShown = false
+    @State private var threeArrow = false
     var body: some View {
         HStack {
             VStack{
@@ -19,6 +21,24 @@ struct BadgeView: View {
                 Text("Accessories:")
                     .padding()
                     .font(.system(size: 20))
+                Image("Badge")
+                    .resizable()
+                     .frame(width: 300 , height: 350)
+               
+                
+                HStack {
+                    Button("banner") {
+                        hiHatIsShown = true
+                    }
+                    if hiHatIsShown == true {
+                        Image("Banner")
+                            .offset(x: 0, y: -200)
+                    }
+                    
+                    Button("Arrows") {
+                        
+                    }
+                }
             Spacer()
             }
             .padding()

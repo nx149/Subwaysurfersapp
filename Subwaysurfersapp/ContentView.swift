@@ -37,7 +37,6 @@ struct ContentView: View {
                     
                     
                     Button("edit...") {
-                        
                     }
                     .font(.system(size: 25))
                     
