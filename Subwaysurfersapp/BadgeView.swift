@@ -21,9 +21,14 @@ struct BadgeView: View {
                 Text("Accessories:")
                     .padding()
                     .font(.system(size: 20))
-                Image("Badge")
-                    .resizable()
-                    .frame(width: 300 , height: 350)
+                
+                ZStack{
+                    
+                    Image("Badge")
+                        .resizable()
+                        .frame(width: 300 , height: 350)
+                    
+                }
                 
                 
                     Button("banner") {
@@ -35,32 +40,18 @@ struct BadgeView: View {
                         }
                     }
                     .padding()
-                    if Banner == true {
-                        Image("Banner")
-                            .offset(x: 0, y: -200)
-                            .padding()
+                    
+                if Banner == true {
+       
+                            Image("Banner")
+                                .offset(x: 0, y: -300)
+                                .padding()
+                        
                     }
                     else if Banner == false {
     
                     }
                     
-                
-                
-                Button("Three downward arrows") {
-                    if threeArrow == false {
-                        threeArrow = true
-                    }
-                    else if threeArrow == true {
-                        threeArrow = false
-                    }
-                }
-                .padding()
-                if threeArrow == true {
-                    Image("Arrows")
-                        .offset(x: 0, y: -200)
-                }
-                else if threeArrow == false {
-                }
                 
                 Spacer()
             }
