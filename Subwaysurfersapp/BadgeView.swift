@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct BadgeView: View {
-    @State private var hiHatIsShown = false
+    @State private var Banner = false
     @State private var threeArrow = false
     var body: some View {
         HStack {
@@ -23,32 +23,54 @@ struct BadgeView: View {
                     .font(.system(size: 20))
                 Image("Badge")
                     .resizable()
-                     .frame(width: 300 , height: 350)
-               
+                    .frame(width: 300 , height: 350)
                 
-                HStack {
+                
                     Button("banner") {
-                        hiHatIsShown = true
+                        if Banner == false {
+                            Banner = true
+                        }
+                        else if Banner == true {
+                            Banner = false
+                        }
                     }
-                    if hiHatIsShown == true {
+                    .padding()
+                    if Banner == true {
                         Image("Banner")
                             .offset(x: 0, y: -200)
+                            .padding()
+                    }
+                    else if Banner == false {
+    
                     }
                     
-                    Button("Arrows") {
-                        
+                
+                
+                Button("Three downward arrows") {
+                    if threeArrow == false {
+                        threeArrow = true
+                    }
+                    else if threeArrow == true {
+                        threeArrow = false
                     }
                 }
-            Spacer()
+                .padding()
+                if threeArrow == true {
+                    Image("Arrows")
+                        .offset(x: 0, y: -200)
+                }
+                else if threeArrow == false {
+                }
+                
+                Spacer()
             }
-            .padding()
         }
         .padding()
         
     }
 }
-    
-    
-    #Preview {
-        BadgeView()
-    }
+
+
+#Preview {
+    BadgeView()
+}
