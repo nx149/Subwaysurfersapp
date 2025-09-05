@@ -37,7 +37,6 @@ struct ContentView: View {
                     
                     
                     Button("edit...") {
-                        
                     }
                     .font(.system(size: 25))
                     
@@ -58,8 +57,12 @@ struct ContentView: View {
                 
             }
             
-            Tab("Leaderboard", systemImage: "heart") {
+            Tab("Leaderboard", systemImage: "trophy") {
                 
+                
+            }
+            Tab("exercise", systemImage: "heart") {
+                TutorialsView()
             }
         }
     }
