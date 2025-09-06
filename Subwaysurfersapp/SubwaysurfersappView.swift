@@ -18,10 +18,9 @@ class Gamescene: SKScene {
     }
     func createGrounds() {
         
-        for 1 in 0...3 {
-            let ground = SKSpriteNode(imageNamed: "G")
+
             
-        }
+        
         
     }
     
