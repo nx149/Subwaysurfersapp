@@ -1,0 +1,6 @@
+== PREVIEW UPDATE ERROR:
+
+    SchemeBuildError: Failed to build the scheme “Subwaysurfersapp”
+    
+    Multiple commands produce conflicting outputs
+    
