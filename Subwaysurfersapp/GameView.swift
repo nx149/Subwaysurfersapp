@@ -16,6 +16,7 @@ struct DetectedObstacle {
     let xPosition: Float
     let detectionTime: TimeInterval
     
+    
     //check if obstacle is the same as the other one
     func isSameObstacle(as other: DetectedObstacle) -> Bool {
         return self.type == other.type &&
