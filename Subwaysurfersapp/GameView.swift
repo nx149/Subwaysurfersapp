@@ -93,12 +93,12 @@ struct GameView: View {
     
     private var jumpingJackOverlay: some View {
         VStack(spacing: 20) {
-            Text("EXERCISE TO SURVIVE!")
+            Text("EXERCISE TO SURVIVE or not idk!!")
                 .font(.largeTitle)
                 .bold()
                 .foregroundColor(.red)
             
-            Text("Do 5 Jumping Jacks!")
+            Text("Do 5 Jumping Jacks rn boi!")
                 .font(.title2)
                 .foregroundColor(.white)
             
@@ -138,7 +138,7 @@ struct GameView: View {
             }
             
             if jumpingJackCount < 5 && challengeStartTime != nil {
-                Text("Failed jumping jack challenge!")
+                Text("u have failed to do the jumping jack challenge.")
                     .font(.headline)
                     .foregroundColor(.red)
             }
@@ -168,7 +168,7 @@ struct GameView: View {
             obstacleModel = try ObstacleClassifieryup(configuration: MLModelConfiguration())
             print("Obstacle ML model loaded successfully")
         } catch {
-            print("Failed to load obstacle ML model:", error)
+            print("Failed to load ML model:", error)
         }
     }
 
@@ -368,7 +368,7 @@ struct GameView: View {
                 }
                 
                 if let obstacle = bestObstacle {
-                    print("Best obstacle detected: \(obstacle.type) with confidence \(obstacle.confidence)")
+                    print("prob the obstacle detected: \(obstacle.type) with confidence \(obstacle.confidence)")
                     trackObstacleHit(obstacle)
                 }
                 
@@ -409,15 +409,15 @@ struct GameView: View {
         //countdown timer
         challengeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             self.challengeTimeRemaining -= 1
-            print("Challenge time remaining: \(self.challengeTimeRemaining)")
+            print("time remaining: \(self.challengeTimeRemaining)")
             
             if self.challengeTimeRemaining <= 0 {
                 self.challengeTimer?.invalidate()
                 if self.jumpingJackCount < 5 {
-                    print("CHALLENGE FAILED - YOU DIE!")
+                    print("u fialed du die lol")
                     self.playerDies()
                 } else {
-                    print("CHALLENGE COMPLETED - YOU SURVIVE!")
+                    print("yay u did it!!")
                     self.challengeCompleted()
                 }
             }
@@ -470,7 +470,7 @@ struct GameView: View {
     }
     
     func challengeCompleted() {
-        print("JUMPING JACK CHALLENGE COMPLETED!")
+        print("yay u did it!!")
         inJumpingJackChallenge = false
         challengeTimer?.invalidate()
         challengeTimer = nil
