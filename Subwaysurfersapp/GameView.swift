@@ -8,6 +8,9 @@
 import SwiftUI
 import SceneKit
 import CoreML
+import Vision
+import UIKit
+import AVFoundation
 
 struct DetectedObstacle {
     let type: String
@@ -16,12 +19,10 @@ struct DetectedObstacle {
     let xPosition: Float
     let detectionTime: TimeInterval
     
-    
-    //check if obstacle is the same as the other one
     func isSameObstacle(as other: DetectedObstacle) -> Bool {
         return self.type == other.type &&
                self.lane == other.lane &&
-               abs(self.xPosition - other.xPosition) < 2.0 // within 2u
+               abs(self.xPosition - other.xPosition) < 2.0
     }
 }
 
@@ -31,6 +32,7 @@ struct GameView: View {
     @State private var currentLane: Int = 1
     @State private var playerDead: Bool = false
     @State private var obstacleModel: ObstacleClassifieryup?
+    @State private var jumpinModel: Trackingjumpingjacks?
     @State private var gameTimer: Timer?
 
     let lanePositions: [Float] = [-5, -2, 1]
@@ -41,8 +43,16 @@ struct GameView: View {
     let obstacleLabels: [String] = ["fenceobstacle", "thethingobstalce", "trainobstacle"]
 
     @State private var obstacleHitCount: Int = 0
-    @State private var maxObstacleHits: Int = 2 // die after hitting 2 obstacles
+    @State private var maxObstacleHits: Int = 2
     @State private var lastObstacleHitTime: TimeInterval = 0
+
+    //jumping jack system challenge thing
+    @State private var inJumpingJackChallenge = false
+    @State private var jumpingJackCount = 0
+    @State private var challengeStartTime: Date? = nil
+    @State private var challengeTimeRemaining: Int = 10
+    @State private var lastJumpDetectionTime: TimeInterval = 0
+    @State private var challengeTimer: Timer?
 
     var body: some View {
         ZStack {
@@ -55,7 +65,7 @@ struct GameView: View {
             .gesture(
                 DragGesture()
                     .onEnded { value in
-                        guard !playerDead else { return } // dead aniamtion boiii
+                        guard !playerDead && !inJumpingJackChallenge else { return }
                         if value.translation.width < -50 {
                             movePlayer(to: max(currentLane - 1, 0))
                         } else if value.translation.width > 50 {
@@ -70,10 +80,48 @@ struct GameView: View {
                 cleanupGame()
             }
 
+            //overlay for jumpinjack challenge
+            if inJumpingJackChallenge {
+                jumpingJackOverlay
+            }
+
             if playerDead {
                 gameOverOverlay
             }
         }
+    }
+    
+    private var jumpingJackOverlay: some View {
+        VStack(spacing: 20) {
+            Text("EXERCISE TO SURVIVE!")
+                .font(.largeTitle)
+                .bold()
+                .foregroundColor(.red)
+            
+            Text("Do 5 Jumping Jacks!")
+                .font(.title2)
+                .foregroundColor(.white)
+            
+            HStack {
+                Text("Completed: \(jumpingJackCount)/5")
+                    .font(.headline)
+                    .foregroundColor(.green)
+                
+                Spacer()
+                
+                Text("Time: \(challengeTimeRemaining)s")
+                    .font(.headline)
+                    .foregroundColor(challengeTimeRemaining <= 3 ? .red : .orange)
+            }
+            
+            Text("Jump with arms up and down!")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .padding()
+        .background(Color.black.opacity(0.9))
+        .cornerRadius(20)
+        .padding()
     }
     
     private var gameOverOverlay: some View {
@@ -83,14 +131,25 @@ struct GameView: View {
                 .bold()
                 .foregroundColor(.white)
             
-            Text("Hit \(obstacleHitCount) obstacles!")
-                .font(.headline)
-                .foregroundColor(.red)
+            if obstacleHitCount > 0 {
+                Text("Hit \(obstacleHitCount) obstacles!")
+                    .font(.headline)
+                    .foregroundColor(.red)
+            }
             
-            Text("Returning to main menu...")
-                .font(.headline)
-                .foregroundColor(.gray)
-        
+            if jumpingJackCount < 5 && challengeStartTime != nil {
+                Text("Failed jumping jack challenge!")
+                    .font(.headline)
+                    .foregroundColor(.red)
+            }
+            
+            Button("Restart Game") {
+                restartGame()
+            }
+            .padding()
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(10)
         }
         .padding()
         .background(Color.black.opacity(0.8))
@@ -100,27 +159,41 @@ struct GameView: View {
     func setupGame() {
         scene = makeScene()
         loadMLModel()
+        loadJumpingJackModel()
         startGameLoop()
     }
     
     func loadMLModel() {
         do {
             obstacleModel = try ObstacleClassifieryup(configuration: MLModelConfiguration())
+            print("Obstacle ML model loaded successfully")
         } catch {
-            print("Failed to load ML model:", error)
+            print("Failed to load obstacle ML model:", error)
+        }
+    }
+
+    func loadJumpingJackModel() {
+        do {
+            jumpinModel = try Trackingjumpingjacks(configuration: MLModelConfiguration())
+            print("Jumping jack ML model loaded successfully")
+        } catch {
+            print("Failed to load jumping jack ML model:", error)
         }
     }
     
     func cleanupGame() {
         gameTimer?.invalidate()
         gameTimer = nil
+        challengeTimer?.invalidate()
+        challengeTimer = nil
         
-        // reset obstacle tracking system
         obstacleHitCount = 0
-        
+        inJumpingJackChallenge = false
+        jumpingJackCount = 0
+        challengeStartTime = nil
+        challengeTimeRemaining = 10
     }
 
-    //setup for scene running scene boi
     func makeScene() -> SCNScene {
         let scene = SCNScene()
         addLight(to: scene)
@@ -137,7 +210,6 @@ struct GameView: View {
         ambientLight.light?.intensity = 200
         scene.rootNode.addChildNode(ambientLight)
         
-        // Directional light for shadows and depth
         let directionalLight = SCNNode()
         directionalLight.light = SCNLight()
         directionalLight.light?.type = .directional
@@ -150,16 +222,14 @@ struct GameView: View {
     func addTrack(to scene: SCNScene) {
         for i in 0..<3 {
             let trackNode: SCNNode
-            
             if let trackScene = SCNScene(named: "Subway_Surfers_Maps.usdz") {
                 trackNode = SCNNode()
                 for child in trackScene.rootNode.childNodes {
                     trackNode.addChildNode(child.clone())
                 }
             } else {
-                trackNode = createFallbackTrack() //fallback smartfella scroll down to seee
+                trackNode = createFallbackTrack()
             }
-            
             trackNode.position = SCNVector3(Float(i) * trackLength, -1, 0)
             trackNode.scale = SCNVector3(0.15, 0.15, 0.15)
             trackNode.eulerAngles = SCNVector3(0, Float.pi, 0)
@@ -170,14 +240,11 @@ struct GameView: View {
     
     func createFallbackTrack() -> SCNNode {
         let trackNode = SCNNode()
-        print("FART") //lolboi
-        
         return trackNode
     }
 
     func addPlayer(to scene: SCNScene) {
         let playerNode: SCNNode
-        
         if let playerScene = SCNScene(named: "Roblox-Noob.usdz") {
             playerNode = SCNNode()
             for child in playerScene.rootNode.childNodes {
@@ -195,7 +262,6 @@ struct GameView: View {
         playerNode.eulerAngles = SCNVector3(0, Float.pi, 0)
         scene.rootNode.addChildNode(playerNode)
 
-        // running animation boi
         let runAction = SCNAction.repeatForever(
             SCNAction.sequence([
                 SCNAction.moveBy(x: 0, y: 0.05, z: 0, duration: 0.2),
@@ -221,26 +287,27 @@ struct GameView: View {
         cameraNode.camera = SCNCamera()
         cameraNode.position = SCNVector3(0, 5, 12)
         cameraNode.eulerAngles = SCNVector3(-Float.pi/6, 0, 0)
-        
         return cameraNode
     }
 
-// loop of the game
     func startGameLoop() {
         gameTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
             guard !playerDead else { return }
-            
             let currentTime = Date().timeIntervalSince1970
             if lastUpdateTime == 0 { lastUpdateTime = currentTime }
             let deltaTime = Float(currentTime - lastUpdateTime)
             lastUpdateTime = currentTime
 
-            updateTrack(deltaTime: deltaTime)
-            updateCamera()
-            
-            // check ml
-            if Int(currentTime * 10) % 4 == 0 {
-                checkCollisionsWithTrackAnalysis()
+            if !inJumpingJackChallenge {
+                updateTrack(deltaTime: deltaTime)
+                updateCamera()
+                
+                if Int(currentTime * 10) % 4 == 0 {
+                    checkCollisionsWithTrackAnalysis()
+                }
+            } else {
+                //heck for jumping jacks
+                processJumpingJackChallenge()
             }
         }
     }
@@ -258,15 +325,11 @@ struct GameView: View {
         guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true),
               let cameraNode = scene?.rootNode.childNode(withName: "mainCamera", recursively: true) else { return }
 
-            let targetPosition = SCNVector3(
-                playerNode.position.x - 10,
-                playerNode.position.y + 5,
-                playerNode.position.z + 0
+        let targetPosition = SCNVector3(
+            playerNode.position.x - 10,
+            playerNode.position.y + 5,
+            playerNode.position.z + 0
         )
-            cameraNode.position = targetPosition
-            cameraNode.look(at: playerNode.position)
-        
-        // smooth camera movement
         let currentPos = cameraNode.position
         let lerpFactor: Float = 0.1
         cameraNode.position = SCNVector3(
@@ -274,33 +337,23 @@ struct GameView: View {
             currentPos.y + (targetPosition.y - currentPos.y) * lerpFactor,
             currentPos.z + (targetPosition.z - currentPos.z) * lerpFactor
         )
-        
         cameraNode.look(at: playerNode.position)
     }
 
     func checkCollisionsWithML() {
-        guard !playerDead, let model = obstacleModel, let scene = scene else {
-            print("ML check failed - playerDead: \(playerDead), model: \(obstacleModel != nil), scene: \(scene != nil)")
-            return
-        }
-        
+        guard !playerDead, let model = obstacleModel, let scene = scene else { return }
         guard let playerNode = scene.rootNode.childNode(withName: "player", recursively: true) else { return }
         
-   // capture what the camea is seeing
         if let cameraImage = captureCurrentLaneImage(),
            let buffer = cameraImage.toCVPixelBuffer() {
             do {
                 let prediction = try model.prediction(image: buffer)
-                print("(\(currentLane)) fart")
-                
                 var bestObstacle: DetectedObstacle? = nil
                 var maxProbability: Double = 0
                 
                 for label in obstacleLabels {
                     if let prob = prediction.targetProbability[label] {
-                        print("  \(label): \(String(format: "%.6f", prob))")
-                        
-                        // threshold and only check current lane
+                        print("Obstacle \(label): \(String(format: "%.4f", prob))")
                         if prob > 0.001 && prob > maxProbability {
                             maxProbability = prob
                             bestObstacle = DetectedObstacle(
@@ -315,74 +368,198 @@ struct GameView: View {
                 }
                 
                 if let obstacle = bestObstacle {
-                    print("obstacle in (\(currentLane)) lane. Confidence: \(obstacle.confidence)")
+                    print("Best obstacle detected: \(obstacle.type) with confidence \(obstacle.confidence)")
                     trackObstacleHit(obstacle)
                 }
                 
             } catch {
                 print("ML error:", error)
             }
-        } else {
-            print("cldnt capture image")
         }
     }
-    
-// hit any 2 obstacles sytstem
+
     func trackObstacleHit(_ obstacle: DetectedObstacle) {
-        print(" you've hit an obstacle in lane (\(currentLane)): \(obstacle.type) - confidence: \(obstacle.confidence)")
-        
-        // only count obstacles in current lane
-        guard obstacle.lane == currentLane else {
-            print("idk wut to print ignore obstacle in other lanes")
-            return
-        }
-        
+        guard obstacle.lane == currentLane else { return }
         let currentTime = Date().timeIntervalSince1970
         
-        // hit count for any obstacle with decent DECENT BTW DECENT BOI confidence
-        if obstacle.confidence > 0.002 && isObstacleInDangerZone(obstacle) {
+        if obstacle.confidence > 0.001 && isObstacleInDangerZone(obstacle) {
             obstacleHitCount += 1
             lastObstacleHitTime = currentTime
-            
             print("Obstacle hit! Count: \(obstacleHitCount)/\(maxObstacleHits)")
             
-            // die once hit 2 obstacles kidna laggy but oh well
             if obstacleHitCount >= maxObstacleHits {
-                print("u've hit \(maxObstacleHits) obstacles now u die loser lol")
-                playerDies()
+                print("you hv hit 2 obstacles start ur jumping jack challenge now!")
+                triggerJumpingJackChallenge()
                 return
             }
         }
     }
+
+    //jumpingajck thing
+    func triggerJumpingJackChallenge() {
+        print("time to do ur jumping jackets. boi")
+        inJumpingJackChallenge = true
+        jumpingJackCount = 0
+        challengeStartTime = Date()
+        challengeTimeRemaining = 10
+        
+        // stop game movement stop time time machine boi
+        gameTimer?.invalidate()
+        
+        //countdown timer
+        challengeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            self.challengeTimeRemaining -= 1
+            print("Challenge time remaining: \(self.challengeTimeRemaining)")
+            
+            if self.challengeTimeRemaining <= 0 {
+                self.challengeTimer?.invalidate()
+                if self.jumpingJackCount < 5 {
+                    print("CHALLENGE FAILED - YOU DIE!")
+                    self.playerDies()
+                } else {
+                    print("CHALLENGE COMPLETED - YOU SURVIVE!")
+                    self.challengeCompleted()
+                }
+            }
+        }
+        
+        //game loop for jump detection
+        startGameLoop()
+    }
+
+    func processJumpingJackChallenge() {
+        guard inJumpingJackChallenge,
+              let jumpinModel = jumpinModel else { return }
+
+        // get current pose data from camera
+        if let poseArray = extractPoseArrayFromCamera() {
+            if let mlArray = floatArrayToMLMultiArray(poseArray) {
+                do {
+                    let prediction = try jumpinModel.prediction(poses: mlArray)
+                    
+                    // check for jumping jack prediction
+                    if let jumpingJackProb = prediction.labelProbabilities["JumpingJack"] {
+                        print("Jumping Jack probability: \(String(format: "%.4f", jumpingJackProb))")
+                        
+                        let currentTime = Date().timeIntervalSince1970
+                        
+                        // detect jumping jack with confidence more than 0.7
+                        if jumpingJackProb > 0.7 && (currentTime - lastJumpDetectionTime) > 0.8 {
+                            jumpingJackCount += 1
+                            lastJumpDetectionTime = currentTime
+                            print("yay u did a jumping jack! Count: \(jumpingJackCount)/5")
+                            
+                            // check if challenge completed
+                            if jumpingJackCount >= 5 {
+                                challengeCompleted()
+                            }
+                        }
+                    }
+                    
+                    for (label, prob) in prediction.labelProbabilities {
+                        if prob > 0.1 { // only print significant probabilities
+                            print("  \(label): \(String(format: "%.3f", prob))")
+                        }
+                    }
+                    
+                } catch {
+                    print("Jumping jack ML error:", error)
+                }
+            }
+        }
+    }
     
-    // current lane image capture for ml
+    func challengeCompleted() {
+        print("JUMPING JACK CHALLENGE COMPLETED!")
+        inJumpingJackChallenge = false
+        challengeTimer?.invalidate()
+        challengeTimer = nil
+        
+        // Reset obstacle count and resume normal gameplay
+        obstacleHitCount = 0
+        
+        // Restart normal game loop
+        gameTimer?.invalidate()
+        startGameLoop()
+    }
+
+    func floatArrayToMLMultiArray(_ array: [Float]) -> MLMultiArray? {
+        do {
+            let mlArray = try MLMultiArray(shape: [NSNumber(value: array.count)], dataType: .float32)
+            for (i, value) in array.enumerated() {
+                mlArray[i] = NSNumber(value: value)
+            }
+            return mlArray
+        } catch {
+            print("Error creating MLMultiArray:", error)
+            return nil
+        }
+    }
+
+    func extractPoseArrayFromCamera() -> [Float]? {
+        guard let image = captureCurrentLaneImage(),
+              let buffer = image.toCVPixelBuffer() else { return nil }
+        return getCurrentPoses(from: buffer)
+    }
+
+    func getCurrentPoses(from pixelBuffer: CVPixelBuffer) -> [Float]? {
+        let request = VNDetectHumanBodyPoseRequest()
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
+        do {
+            try handler.perform([request])
+            guard let observations = request.results as? [VNHumanBodyPoseObservation],
+                  let firstPerson = observations.first else {
+                print("No pose detected")
+                return nil
+            }
+
+            var poseArray: [Float] = []
+            let joints = try firstPerson.recognizedPoints(.all)
+            
+            // convert pose points to array format
+            for (jointName, point) in joints {
+                if point.confidence > 0.5 {
+                    //only use confident detections
+                    poseArray.append(Float(point.location.x))
+                    poseArray.append(Float(point.location.y))
+                    poseArray.append(Float(point.confidence))
+                } else {
+                    // zeros for low-confidence data thing
+                    poseArray.append(0.0)
+                    poseArray.append(0.0)
+                    poseArray.append(0.0)
+                }
+            }
+            
+            print("Extracted \(poseArray.count) pose values")
+            return poseArray
+            
+        } catch {
+            print("Pose detection error:", error)
+            return nil
+        }
+    }
+
     func captureCurrentLaneImage() -> UIImage? {
         guard let scene = scene,
               let cameraNode = scene.rootNode.childNode(withName: "mainCamera", recursively: true),
-              let playerNode = scene.rootNode.childNode(withName: "player", recursively: true) else {
-            return nil
-        }
+              let playerNode = scene.rootNode.childNode(withName: "player", recursively: true) else { return nil }
         
         let focusedCameraNode = cameraNode.clone()
-        
-        // camera
-        let currentLaneZ = lanePositions[currentLane]
         focusedCameraNode.position = SCNVector3(
             playerNode.position.x - 8,
             playerNode.position.y + 5,
-            currentLaneZ
+            lanePositions[currentLane]
         )
-        
         focusedCameraNode.eulerAngles = SCNVector3(0, 0, 0)
         
         let lookAtPoint = SCNVector3(
             playerNode.position.x + 8,
             playerNode.position.y,
-            currentLaneZ
+            lanePositions[currentLane]
         )
         focusedCameraNode.look(at: lookAtPoint)
         
-        // renderer
         let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(), options: nil)
         renderer.scene = scene
         renderer.pointOfView = focusedCameraNode
@@ -391,41 +568,23 @@ struct GameView: View {
         return image
     }
 
-    // obstacle in danger zone or no
     func isObstacleInDangerZone(_ obstacle: DetectedObstacle) -> Bool {
-        guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true) else {
-            return false
-        }
-        
-        guard obstacle.lane == currentLane else {
-            return false
-        }
-        
-        let playerX = playerNode.position.x
-        let obstacleX = obstacle.xPosition
-        
-        // obstacle dangerous if too close
-        let distanceAhead = obstacleX - playerX
-        let dangerZone: Float = 2.0
-        
-        print("how close u r boi (Current Lane \(currentLane)) - Player X: \(playerX), Obstacle X: \(obstacleX), Distance ahead: \(distanceAhead)")
-        
-        return abs(distanceAhead) < dangerZone
+        guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true) else { return false }
+        let distanceAhead = obstacle.xPosition - playerNode.position.x
+        return abs(distanceAhead) < 5.0 && obstacle.lane == currentLane // danger zone increased
     }
 
-    // collisions checker
     func checkCollisionsWithTrackAnalysis() {
-        guard !playerDead, let model = obstacleModel, let scene = scene else { return }
-        
+        guard !playerDead else { return }
         checkCollisionsWithML()
     }
 
     func playerDies() {
         guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true) else { return }
         playerDead = true
+        inJumpingJackChallenge = false
         
         playerNode.removeAllActions()
-        
         let fallAction = SCNAction.sequence([
             SCNAction.rotateBy(x: CGFloat(Float.pi)/2, y: 0, z: 0, duration: 0.5),
             SCNAction.fadeOut(duration: 0.5)
@@ -434,33 +593,43 @@ struct GameView: View {
         
         gameTimer?.invalidate()
         gameTimer = nil
+        challengeTimer?.invalidate()
+        challengeTimer = nil
         
-        print("u died loser lol! Hit \(obstacleHitCount) obstacles!")
+        print("u died loser lololol!")
     }
 
     func restartGame() {
         cleanupGame()
-        
-        // reset
         playerDead = false
         currentLane = 1
         lastUpdateTime = 0
         trackNodes.removeAll()
-        
-        //restart
         setupGame()
-    }
-    
-    func navigateToHome() {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController = UIHostingController(rootView: ContentView())
-            window.makeKeyAndVisible()
-        }
     }
 }
 
-// extensions convert uimimage to cvpixelbuffer
+//camera preview
+struct CameraPreviewView: UIViewRepresentable {
+    let session: AVCaptureSession?
+    
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: CGRect(x: 0, y: 0, width: 120, height: 160))
+        
+        guard let session = session else { return view }
+        
+        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
+        previewLayer.frame = view.bounds
+        previewLayer.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(previewLayer)
+        
+        return view
+    }
+    
+    func updateUIView(_ uiView: UIView, context: Context) {
+    }
+}
+
 extension UIImage {
     func toCVPixelBuffer() -> CVPixelBuffer? {
         let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
