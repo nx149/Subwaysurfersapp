@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		ED32601E2E71264600A8BE74 /* Subwaysurfersapp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Subwaysurfersapp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D9332FAE2E501BF2009D7A60 /* Subwaysurfersapp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Subwaysurfersapp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,8 +33,16 @@
 			isa = PBXGroup;
 			children = (
 				D9332FB02E501BF2009D7A60 /* Subwaysurfersapp */,
-				ED32601E2E71264600A8BE74 /* Subwaysurfersapp.app */,
+				D9332FAF2E501BF2009D7A60 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D9332FAF2E501BF2009D7A60 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D9332FAE2E501BF2009D7A60 /* Subwaysurfersapp.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -44,9 +52,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D9332FB92E501BF3009D7A60 /* Build configuration list for PBXNativeTarget "Subwaysurfersapp" */;
 			buildPhases = (
-				D9332FAC2E501BF2009D7A60 /* Resources */,
 				D9332FAA2E501BF2009D7A60 /* Sources */,
 				D9332FAB2E501BF2009D7A60 /* Frameworks */,
+				D9332FAC2E501BF2009D7A60 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -59,7 +67,7 @@
 			packageProductDependencies = (
 			);
 			productName = Subwaysurfersapp;
-			productReference = ED32601E2E71264600A8BE74 /* Subwaysurfersapp.app */;
+			productReference = D9332FAE2E501BF2009D7A60 /* Subwaysurfersapp.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -87,7 +95,7 @@
 			mainGroup = D9332FA52E501BF2009D7A60;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = D9332FA52E501BF2009D7A60;
+			productRefGroup = D9332FAF2E501BF2009D7A60 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -245,7 +253,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -273,7 +280,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "We need camera access";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
