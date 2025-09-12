@@ -59,7 +59,7 @@ struct ContentView: View {
             
             Tab("Leaderboard", systemImage: "trophy") {
                 
-                
+            LeaderboardView()
             }
             Tab("exercise", systemImage: "heart") {
                 TutorialsView()
