@@ -39,11 +39,9 @@ struct GameView: View {
 
     let obstacleLabels: [String] = ["fenceobstacle", "thethingobstalce", "trainobstacle"]
 
-  //track detction obstacle thing!
-    @State private var detectedObstaclesPerLane: [Int: [DetectedObstacle]] = [0: [], 1: [], 2: []]
-    @State private var lastObstacleDetection: DetectedObstacle? = nil
-    @State private var sameTrackDetectionCount: Int = 0
-    @State private var trackConsistencyThreshold: Int = 3 // must detect same obstacle 3 times
+    @State private var obstacleHitCount: Int = 0
+    @State private var maxObstacleHits: Int = 2 // die after hitting 2 obstacles
+    @State private var lastObstacleHitTime: TimeInterval = 0
 
     var body: some View {
         ZStack {
@@ -79,10 +77,14 @@ struct GameView: View {
     
     private var gameOverOverlay: some View {
         VStack(spacing: 20) {
-            Text("💀 You Died!")
+            Text("u died lol!")
                 .font(.largeTitle)
                 .bold()
                 .foregroundColor(.white)
+            
+            Text("Hit \(obstacleHitCount) obstacles!")
+                .font(.headline)
+                .foregroundColor(.red)
             
             Text("Returning to main menu...")
                 .font(.headline)
@@ -112,13 +114,12 @@ struct GameView: View {
         gameTimer?.invalidate()
         gameTimer = nil
         
-// reset track
-        detectedObstaclesPerLane = [0: [], 1: [], 2: []]
-        lastObstacleDetection = nil
-        sameTrackDetectionCount = 0
+        // reset obstacle tracking system
+        obstacleHitCount = 0
+        
     }
 
-// scene
+    //setup for scene running scene boi
     func makeScene() -> SCNScene {
         let scene = SCNScene()
         addLight(to: scene)
@@ -193,7 +194,7 @@ struct GameView: View {
         playerNode.eulerAngles = SCNVector3(0, Float.pi, 0)
         scene.rootNode.addChildNode(playerNode)
 
- // running naimation boi
+        // running animation boi
         let runAction = SCNAction.repeatForever(
             SCNAction.sequence([
                 SCNAction.moveBy(x: 0, y: 0.05, z: 0, duration: 0.2),
@@ -217,12 +218,13 @@ struct GameView: View {
         let cameraNode = SCNNode()
         cameraNode.name = "mainCamera"
         cameraNode.camera = SCNCamera()
-        cameraNode.position = SCNVector3(-8, 4, 0)
-        cameraNode.eulerAngles = SCNVector3(-Float.pi/8, 0, 0)
+        cameraNode.position = SCNVector3(0, 5, 12)
+        cameraNode.eulerAngles = SCNVector3(-Float.pi/6, 0, 0)
+        
         return cameraNode
     }
 
-    // MARK: - Game Loop
+// loop of the game
     func startGameLoop() {
         gameTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
             guard !playerDead else { return }
@@ -235,7 +237,7 @@ struct GameView: View {
             updateTrack(deltaTime: deltaTime)
             updateCamera()
             
-   // check ml
+            // check ml
             if Int(currentTime * 10) % 4 == 0 {
                 checkCollisionsWithTrackAnalysis()
             }
@@ -255,13 +257,15 @@ struct GameView: View {
         guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true),
               let cameraNode = scene?.rootNode.childNode(withName: "mainCamera", recursively: true) else { return }
 
-        let targetPosition = SCNVector3(
-            playerNode.position.x - 8,
-            playerNode.position.y + 4,
-            playerNode.position.z
+            let targetPosition = SCNVector3(
+                playerNode.position.x - 10,
+                playerNode.position.y + 5,
+                playerNode.position.z + 0
         )
+            cameraNode.position = targetPosition
+            cameraNode.look(at: playerNode.position)
         
-        // Smooth camera movement
+        // smooth camera movement
         let currentPos = cameraNode.position
         let lerpFactor: Float = 0.1
         cameraNode.position = SCNVector3(
@@ -273,7 +277,6 @@ struct GameView: View {
         cameraNode.look(at: playerNode.position)
     }
 
-    // MARK: - ML Collision Detection with Lane-Specific Focus
     func checkCollisionsWithML() {
         guard !playerDead, let model = obstacleModel, let scene = scene else {
             print("ML check failed - playerDead: \(playerDead), model: \(obstacleModel != nil), scene: \(scene != nil)")
@@ -282,12 +285,12 @@ struct GameView: View {
         
         guard let playerNode = scene.rootNode.childNode(withName: "player", recursively: true) else { return }
         
-        // Capture what the camera sees - focused on current lane
+   // capture what the camea is seeing
         if let cameraImage = captureCurrentLaneImage(),
            let buffer = cameraImage.toCVPixelBuffer() {
             do {
                 let prediction = try model.prediction(image: buffer)
-                print("ML Prediction results for current lane (\(currentLane)):")
+                print("(\(currentLane)) fart")
                 
                 var bestObstacle: DetectedObstacle? = nil
                 var maxProbability: Double = 0
@@ -296,13 +299,13 @@ struct GameView: View {
                     if let prob = prediction.targetProbability[label] {
                         print("  \(label): \(String(format: "%.6f", prob))")
                         
-                        // CHANGED: Much lower threshold (0.001) and only check current lane
+                        // threshold and only check current lane
                         if prob > 0.001 && prob > maxProbability {
                             maxProbability = prob
                             bestObstacle = DetectedObstacle(
                                 type: label,
                                 confidence: prob,
-                                lane: currentLane, // CHANGED: Always use current lane
+                                lane: currentLane,
                                 xPosition: playerNode.position.x,
                                 detectionTime: Date().timeIntervalSince1970
                             )
@@ -311,22 +314,47 @@ struct GameView: View {
                 }
                 
                 if let obstacle = bestObstacle {
-                    print("🎯 Obstacle detected in current lane (\(currentLane)) with confidence \(obstacle.confidence)")
-                    trackObstacleConsistency(obstacle)
-                } else {
-                    // No obstacle detected, reset tracking
-                    resetObstacleTracking()
+                    print("obstacle in (\(currentLane)) lane. Confidence: \(obstacle.confidence)")
+                    trackObstacleHit(obstacle)
                 }
                 
             } catch {
-                print("ML prediction error:", error)
+                print("ML error:", error)
             }
         } else {
-            print("Failed to capture scene image or convert to buffer")
+            print("cldnt capture image")
         }
     }
     
-// current lane image capture for ml
+// hit any 2 obstacles sytstem
+    func trackObstacleHit(_ obstacle: DetectedObstacle) {
+        print(" you've hit an obstacle in lane (\(currentLane)): \(obstacle.type) - confidence: \(obstacle.confidence)")
+        
+        // only count obstacles in current lane
+        guard obstacle.lane == currentLane else {
+            print("idk wut to print ignore obstacle in other lanes")
+            return
+        }
+        
+        let currentTime = Date().timeIntervalSince1970
+        
+        // hit count for any obstacle with decent DECENT BTW DECENT BOI confidence
+        if obstacle.confidence > 0.002 && isObstacleInDangerZone(obstacle) {
+            obstacleHitCount += 1
+            lastObstacleHitTime = currentTime
+            
+            print("Obstacle hit! Count: \(obstacleHitCount)/\(maxObstacleHits)")
+            
+            // die once hit 2 obstacles kidna laggy but oh well
+            if obstacleHitCount >= maxObstacleHits {
+                print("u've hit \(maxObstacleHits) obstacles now u die loser lol")
+                playerDies()
+                return
+            }
+        }
+    }
+    
+    // current lane image capture for ml
     func captureCurrentLaneImage() -> UIImage? {
         guard let scene = scene,
               let cameraNode = scene.rootNode.childNode(withName: "mainCamera", recursively: true),
@@ -336,7 +364,7 @@ struct GameView: View {
         
         let focusedCameraNode = cameraNode.clone()
         
-// camera
+        // camera
         let currentLaneZ = lanePositions[currentLane]
         focusedCameraNode.position = SCNVector3(
             playerNode.position.x - 8,
@@ -353,7 +381,7 @@ struct GameView: View {
         )
         focusedCameraNode.look(at: lookAtPoint)
         
-       // renderer
+        // renderer
         let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(), options: nil)
         renderer.scene = scene
         renderer.pointOfView = focusedCameraNode
@@ -361,49 +389,8 @@ struct GameView: View {
         let image = renderer.snapshot(atTime: CACurrentMediaTime(), with: CGSize(width: 224, height: 224), antialiasingMode: .none)
         return image
     }
-    
-    func trackObstacleConsistency(_ newObstacle: DetectedObstacle) {
-        print("🔍 Tracking obstacle in CURRENT LANE (\(currentLane)): \(newObstacle.type) - confidence: \(newObstacle.confidence)")
-        
-        // only track obstacles in current lane
-        guard newObstacle.lane == currentLane else {
-            print("⚠️ Ignoring obstacle not in current lane")
-            return
-        }
-        
-// c if its the same as last detction
-        if let lastObstacle = lastObstacleDetection,
-           newObstacle.isSameObstacle(as: lastObstacle) {
-            
-            sameTrackDetectionCount += 1
-            print("same obstacle \(sameTrackDetectionCount) times in current lane continously boii")
-            
-            lastObstacleDetection = newObstacle
-            
-            detectedObstaclesPerLane[currentLane]?.append(newObstacle)
-            
-  // threshold
-            if sameTrackDetectionCount >= trackConsistencyThreshold && newObstacle.confidence > 0.005 {
-                print("obstacle in current lane \(newObstacle.type) detected \(sameTrackDetectionCount) times")
-                
-                if isObstacleInDangerZone(newObstacle) {
-                    playerDies()
-                    return
-                }
-            }
-            
-        } else {
-            print("there's a new obstacle in current lane")
-            sameTrackDetectionCount = 1
-            lastObstacleDetection = newObstacle
-            detectedObstaclesPerLane[currentLane]?.append(newObstacle)
-        }
-        
-        // clean old detctions 3 or more
-        cleanupOldDetections()
-    }
 
-  // obstacle in danger zone or no
+    // obstacle in danger zone or no
     func isObstacleInDangerZone(_ obstacle: DetectedObstacle) -> Bool {
         guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true) else {
             return false
@@ -416,7 +403,7 @@ struct GameView: View {
         let playerX = playerNode.position.x
         let obstacleX = obstacle.xPosition
         
-     // obstacle dnagerous if too close
+        // obstacle dangerous if too close
         let distanceAhead = obstacleX - playerX
         let dangerZone: Float = 2.0
         
@@ -425,97 +412,11 @@ struct GameView: View {
         return abs(distanceAhead) < dangerZone
     }
 
-   // reset obstacle tracking
-    func resetObstacleTracking() {
-        if sameTrackDetectionCount > 0 {
-            print("🔄 Resetting obstacle tracking (was tracking \(sameTrackDetectionCount) detections)")
-        }
-        sameTrackDetectionCount = 0
-        lastObstacleDetection = nil
-    }
-
-        // cleam old detections
-    func cleanupOldDetections() {
-        let currentTime = Date().timeIntervalSince1970
-        let maxAge: TimeInterval = 3.0 // keep detections for 3 seconds
-        
-        detectedObstaclesPerLane[currentLane] = detectedObstaclesPerLane[currentLane]?.filter { obstacle in
-            currentTime - obstacle.detectionTime < maxAge
-        }
-        
-        for lane in [0, 1, 2] where lane != currentLane {
-            detectedObstaclesPerLane[lane] = detectedObstaclesPerLane[lane]?.filter { obstacle in
-                currentTime - obstacle.detectionTime < maxAge
-            }
-        }
-    }
-
-   // collsions checker
+    // collisions checker
     func checkCollisionsWithTrackAnalysis() {
         guard !playerDead, let model = obstacleModel, let scene = scene else { return }
         
         checkCollisionsWithML()
-        
-        // for current lane only
-        if analyzeCurrentLaneConsistency() && lastObstacleDetection != nil {
-            let obstacle = lastObstacleDetection!
-            
-            if obstacle.confidence > 0.002 && isObstacleInDangerZone(obstacle) {
-                print("COLLISION THREAT! boi wut")
-                playerDies()
-            }
-        }
-    }
-
-   // current lane consistency
-    func analyzeCurrentLaneConsistency() -> Bool {
-        guard let playerNode = scene?.rootNode.childNode(withName: "player", recursively: true) else {
-            return false
-        }
-        
-        let playerX = playerNode.position.x
-        
-        // only detetdciosn from current lane if not lag lol
-        let recentDetections = detectedObstaclesPerLane[currentLane]?.filter { obstacle in
-            let timeDiff = Date().timeIntervalSince1970 - obstacle.detectionTime
-            return timeDiff < 2.0 // 2 secs
-        } ?? []
-        
-        if recentDetections.count >= 2 {
-            let sortedByTime = recentDetections.sorted { $0.detectionTime < $1.detectionTime }
-            
-            if sortedByTime.count >= 2 {
-                let first = sortedByTime[0]
-                let last = sortedByTime[sortedByTime.count - 1]
-                
-                let isGettingCloser = (last.xPosition - playerX) < (first.xPosition - playerX) // Fixed comparison
-                
-                print("🔄 Current lane (\(currentLane)) consistency analysis:")
-                print("   Recent detections: \(recentDetections.count)")
-                print("   Getting closer: \(isGettingCloser)")
-                print("   First detection X: \(first.xPosition), Last: \(last.xPosition), Player: \(playerX)")
-                print("   Distance trend: First=\(abs(first.xPosition - playerX)), Last=\(abs(last.xPosition - playerX))")
-                
-                return isGettingCloser || recentDetections.count >= trackConsistencyThreshold
-            }
-        }
-        
-        return false
-    }
-    
-    func captureSceneImage() -> UIImage? {
-        guard let scene = scene,
-              let cameraNode = scene.rootNode.childNode(withName: "mainCamera", recursively: true) else {
-            return nil
-        }
-        
-        // renderer to capture game scene from cam's perspective
-        let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(), options: nil)
-        renderer.scene = scene
-        renderer.pointOfView = cameraNode
-        
-        let image = renderer.snapshot(atTime: CACurrentMediaTime(), with: CGSize(width: 224, height: 224), antialiasingMode: .none)
-        return image
     }
 
     func playerDies() {
@@ -533,7 +434,7 @@ struct GameView: View {
         gameTimer?.invalidate()
         gameTimer = nil
         
-        print("u died loser lol!")
+        print("u died loser lol! Hit \(obstacleHitCount) obstacles!")
     }
 
     func restartGame() {
@@ -550,7 +451,6 @@ struct GameView: View {
     }
     
     func navigateToHome() {
-
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first {
             window.rootViewController = UIHostingController(rootView: ContentView())
@@ -559,11 +459,11 @@ struct GameView: View {
     }
 }
 
-// extemnsions convert uimimage to cvpixelbuffer
+// extensions convert uimimage to cvpixelbuffer
 extension UIImage {
     func toCVPixelBuffer() -> CVPixelBuffer? {
-            let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
-                     kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue] as CFDictionary
+        let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
+                 kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue] as CFDictionary
         var pixelBuffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(kCFAllocatorDefault,
                                        Int(size.width),
