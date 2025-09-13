@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict/>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict/>
+	</array>
+    
+    <!-- Add this block for camera permission -->
+    <key>NSCameraUsageDescription</key>
+    <string>We need access to your camera to show the live feed</string>
+    
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>We need access to your photo library to pick videos</string>
+
+
+</dict>
+</plist>
